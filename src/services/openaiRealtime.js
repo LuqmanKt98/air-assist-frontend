@@ -43,12 +43,36 @@ class OpenAIRealtimeService {
     this.onDisconnect = callbacks.onDisconnect || (() => {});
 
     try {
-      // Connect to our WebSocket proxy instead of directly to OpenAI
-      console.log("Connecting to OpenAI Realtime API via WebSocket proxy...");
-      const wsUrl = config.websocketUrl;
+      // Get ephemeral token from backend for direct OpenAI connection
+      console.log("Getting ephemeral token for OpenAI Realtime API...");
 
-      // Create WebSocket connection to our proxy
-      this.ws = new WebSocket(wsUrl);
+      const tokenResponse = await fetch(`${config.backendUrl}/openai-realtime`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get ephemeral token: ${tokenResponse.status}`);
+      }
+
+      const tokenData = await tokenResponse.json();
+
+      if (!tokenData.success || !tokenData.token) {
+        throw new Error('Invalid token response from backend');
+      }
+
+      console.log("✅ Ephemeral token received, connecting directly to OpenAI...");
+
+      // Connect directly to OpenAI using ephemeral token
+      const wsUrl = `${tokenData.websocketUrl}`;
+      this.ws = new WebSocket(wsUrl, [], {
+        headers: {
+          'Authorization': `Bearer ${tokenData.token}`,
+          'OpenAI-Beta': 'realtime=v1'
+        }
+      });
 
     } catch (error) {
       console.error("Failed to get ephemeral token:", error);
